@@ -1,106 +1,181 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import axios from 'axios';
-import { LayoutDashboard, User, BarChart3, Upload, LogOut, ShieldCheck, Search } from 'lucide-react';
-import Auth from './pages/Auth';
-import StudentDashboard from './pages/StudentDashboard';
-import AdminDashboard from './pages/AdminDashboard';
-import Profile from './pages/Profile';
-import SkillGap from './pages/SkillGap';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { BrowserRouter as Router, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BarChart3, LayoutDashboard, LogOut, Menu, ShieldCheck, TrendingUp, User, X } from 'lucide-react';
 
-// API Configuration
-const API_BASE_URL = '';
-axios.defaults.baseURL = API_BASE_URL;
+import { getCurrentUser } from './api/authApi';
+
+const Auth = lazy(() => import('./pages/Auth'));
+const StudentDashboard = lazy(() => import('./pages/StudentDashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const Profile = lazy(() => import('./pages/Profile'));
+const SkillGap = lazy(() => import('./pages/SkillGap'));
+
+const RouteLoader = () => (
+  <div style={{ display: 'flex', minHeight: '60vh', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="spinner" />
+  </div>
+);
 
 const App = () => {
-  const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || 'null');
+    } catch {
+      return null;
+    }
+  });
+  const [token, setToken] = useState(() => localStorage.getItem('token'));
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      fetchUser();
-    }
-  }, [token]);
+    if (!token) return;
 
-  const fetchUser = async () => {
-    try {
-      const res = await axios.get('/users/me');
-      setUser(res.data);
-      localStorage.setItem('user', JSON.stringify(res.data));
-    } catch (err) {
-      logout();
-    }
-  };
+    const syncUser = async () => {
+      try {
+        const current = await getCurrentUser();
+        setUser(current);
+        localStorage.setItem('user', JSON.stringify(current));
+      } catch {
+        logout();
+      }
+    };
+
+    syncUser();
+  }, [token]);
 
   const logout = () => {
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    delete axios.defaults.headers.common['Authorization'];
   };
+
+  const dashboard = user?.role === 'admin' ? <AdminDashboard /> : <StudentDashboard />;
 
   return (
     <Router>
       <div className="app-container">
-        {user && <Sidebar user={user} logout={logout} />}
-        <main className={user ? 'main-content' : 'w-full'}>
-          <Routes>
-            <Route path="/login" element={!user ? <Auth setToken={setToken} setUser={setUser} /> : <Navigate to="/" />} />
-            <Route path="/" element={user ? (user.role === 'admin' ? <AdminDashboard /> : <StudentDashboard />) : <Navigate to="/login" />} />
-            <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
-            <Route path="/gap-analysis" element={user ? <SkillGap /> : <Navigate to="/login" />} />
-          </Routes>
+        {user && (
+          <button
+            className="hamburger-btn"
+            onClick={() => setSidebarOpen((open) => !open)}
+            aria-label="Toggle sidebar navigation"
+          >
+            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        )}
+
+        {user && (
+          <Sidebar user={user} logout={logout} mobileOpen={sidebarOpen} closeMobile={() => setSidebarOpen(false)} />
+        )}
+
+        {user && sidebarOpen && <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} />}
+
+        <main className={user ? 'main-content' : 'w-full'} style={!user ? { width: '100%' } : {}}>
+          <Suspense fallback={<RouteLoader />}>
+            <Routes>
+              <Route
+                path="/login"
+                element={!user ? <Auth setToken={setToken} setUser={setUser} /> : <Navigate to="/" />}
+              />
+              <Route path="/" element={user ? dashboard : <Navigate to="/login" />} />
+              <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
+              <Route path="/gap-analysis" element={user ? <SkillGap /> : <Navigate to="/login" />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </Router>
   );
 };
 
-const Sidebar = ({ user, logout }) => {
+const Sidebar = ({ user, logout, mobileOpen, closeMobile }) => {
   const location = useLocation();
-  const isAdmin = user.role === 'admin';
+  const isAdmin = user?.role === 'admin';
+  const initials = useMemo(() => (user?.email || 'U')[0].toUpperCase(), [user?.email]);
 
   return (
-    <div className="sidebar glass">
-      <div className="flex items-center gap-3 mb-10 px-4">
-        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
-          <ShieldCheck className="text-white" size={24} />
+    <aside className={`sidebar glass ${mobileOpen ? 'mobile-open' : ''}`}>
+      <div className="sidebar-logo">
+        <div className="sidebar-logo-icon">
+          <ShieldCheck size={22} color="white" />
         </div>
-        <h1 className="font-bold text-xl tracking-tight">SkillSync</h1>
+        <h1>SkillSync</h1>
       </div>
 
-      <nav className="flex-1">
-        <NavLink to="/" icon={<LayoutDashboard size={20} />} label="Dashboard" active={location.pathname === '/'} />
+      <nav style={{ flex: 1 }} aria-label="Primary navigation">
+        <div className="sidebar-section-label">Main</div>
+        <NavLink
+          to="/"
+          icon={<LayoutDashboard size={17} />}
+          label="Dashboard"
+          active={location.pathname === '/'}
+          onClick={closeMobile}
+        />
+
         {isAdmin ? (
-          <NavLink to="/admin" icon={<BarChart3 size={20} />} label="Batch Overview" active={location.pathname === '/admin'} />
+          <NavLink
+            to="/"
+            icon={<BarChart3 size={17} />}
+            label="Batch Overview"
+            active={false}
+            onClick={closeMobile}
+          />
         ) : (
           <>
-            <NavLink to="/profile" icon={<User size={20} />} label="My Profile" active={location.pathname === '/profile'} />
-            <NavLink to="/gap-analysis" icon={<BarChart3 size={20} />} label="Gap Analysis" active={location.pathname === '/gap-analysis'} />
+            <div className="sidebar-section-label" style={{ marginTop: 16 }}>
+              Profile
+            </div>
+            <NavLink
+              to="/profile"
+              icon={<User size={17} />}
+              label="My Profile"
+              active={location.pathname === '/profile'}
+              onClick={closeMobile}
+            />
+            <NavLink
+              to="/gap-analysis"
+              icon={<TrendingUp size={17} />}
+              label="Gap Analysis"
+              active={location.pathname === '/gap-analysis'}
+              onClick={closeMobile}
+            />
           </>
         )}
       </nav>
 
-      <div className="mt-auto px-4">
-        <div className="p-4 rounded-xl bg-slate-800/40 mb-4">
-          <p className="text-xs text-slate-500 mb-1">Logged in as</p>
-          <p className="font-semibold text-sm truncate">{user.email}</p>
+      <div className="sidebar-footer">
+        <div className="sidebar-user">
+          <div className="sidebar-avatar">{initials}</div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p className="sidebar-email">{user?.email}</p>
+            <p className="sidebar-role">{user?.role}</p>
+          </div>
         </div>
-        <button onClick={logout} className="nav-link w-full border-none cursor-pointer text-red-400 hover:text-red-300">
-          <LogOut size={20} />
+        <button
+          onClick={() => {
+            logout();
+            closeMobile();
+          }}
+          className="nav-link"
+          style={{ color: '#ef4444', width: '100%', border: '1px solid transparent' }}
+          aria-label="Sign out"
+        >
+          <span className="nav-icon" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+            <LogOut size={15} />
+          </span>
           <span>Sign Out</span>
         </button>
       </div>
-    </div>
+    </aside>
   );
 };
 
-const NavLink = ({ to, icon, label, active }) => (
-  <Link to={to} className={`nav-link ${active ? 'active' : ''}`}>
-    {icon}
+const NavLink = ({ to, icon, label, active, onClick }) => (
+  <Link to={to} className={`nav-link ${active ? 'active' : ''}`} onClick={onClick} aria-current={active ? 'page' : undefined}>
+    <span className="nav-icon">{icon}</span>
     <span>{label}</span>
+    {active && <span className="nav-dot" />}
   </Link>
 );
 

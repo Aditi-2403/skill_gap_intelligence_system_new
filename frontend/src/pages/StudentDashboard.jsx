@@ -1,108 +1,183 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Briefcase, GraduationCap, TrendingUp, CheckCircle2, AlertCircle } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+import { AlertCircle, Briefcase, CheckCircle2, GraduationCap, TrendingUp, Zap } from 'lucide-react';
+import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+
+import { getIndustryRoles, getSkillGap } from '../api/analysisApi';
+import { getProfile } from '../api/profileApi';
+
+const useCounter = (target, duration = 1200) => {
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    const normalizedTarget = Number(target) || 0;
+    if (normalizedTarget <= 0) {
+      setValue(0);
+      return;
+    }
+
+    const step = Math.ceil(normalizedTarget / (duration / 16));
+    let current = 0;
+    const timer = window.setInterval(() => {
+      current = Math.min(current + step, normalizedTarget);
+      setValue(current);
+      if (current >= normalizedTarget) {
+        window.clearInterval(timer);
+      }
+    }, 16);
+
+    return () => window.clearInterval(timer);
+  }, [target, duration]);
+
+  return value;
+};
+
+const StatCard = ({ icon, label, value, sub, color, suffix = '', delay = 0 }) => {
+  const count = useCounter(value, 1000);
+
+  return (
+    <motion.div className="stat-card glass" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.4 }} style={{ borderLeft: `3px solid ${color}` }}>
+      <div className="stat-icon-wrap" style={{ background: `${color}18`, color }}>{icon}</div>
+      <div className="stat-value">{count}{suffix}</div>
+      <div className="stat-title">{label}</div>
+      <div className="stat-label" style={{ marginTop: 4 }}>{sub}</div>
+    </motion.div>
+  );
+};
+
+const DashboardTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) {
+    return null;
+  }
+
+  return (
+    <div className="glass" style={{ padding: '10px 14px', fontSize: '0.8rem' }}>
+      <p style={{ fontWeight: 600 }}>{payload[0].name}</p>
+      <p style={{ color: payload[0].payload.fill }}>{payload[0].value} items</p>
+    </div>
+  );
+};
 
 const StudentDashboard = () => {
-    const [profile, setProfile] = useState(null);
-    const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [gapSummary, setGapSummary] = useState({ readiness: 0, gaps: 0 });
 
-    useEffect(() => {
-        fetchProfile();
-    }, []);
+  useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        const profileData = await getProfile();
+        setProfile(profileData);
 
-    const fetchProfile = async () => {
-        try {
-            const res = await axios.get('/profile');
-            setProfile(res.data);
-        } catch (err) {
-            console.error('No profile found');
-        } finally {
-            setLoading(false);
+        const roles = await getIndustryRoles();
+        if (roles?.length) {
+          const firstRole = roles[0]?.role;
+          const gap = await getSkillGap(firstRole);
+          setGapSummary({ readiness: gap.match_score || 0, gaps: gap.missing_skills?.length || 0 });
         }
+      } catch {
+        // Keep graceful fallback for users without profile.
+      } finally {
+        setLoading(false);
+      }
     };
 
-    if (loading) return <div className="p-10 text-center">Loading dashboard...</div>;
+    loadDashboard();
+  }, []);
 
-    const skills = profile?.skills ? profile.skills.split(',').map(s => s.trim()) : [];
+  const skills = useMemo(() => {
+    if (!profile?.skills) return [];
+    return profile.skills
+      .split(',')
+      .map((skill) => skill.trim())
+      .filter(Boolean);
+  }, [profile?.skills]);
 
+  const pieData = [
+    { name: 'Skills', value: Math.max(skills.length, 1), fill: '#0ea5e9' },
+    { name: 'Certifications', value: profile?.certifications ? 1 : 0, fill: '#16a34a' },
+    { name: 'Projects', value: profile?.projects ? 1 : 0, fill: '#f59e0b' },
+  ];
+
+  if (loading) {
     return (
-        <div className="space-y-8 animate-fade">
-            <div>
-                <h1 className="text-3xl font-bold">Welcome back, {profile?.full_name || 'Student'}!</h1>
-                <p className="text-slate-400 mt-2">Here's your skill overview and industry readiness.</p>
-            </div>
-
-            <div className="grid">
-                <div className="stat-card glass">
-                    <div className="flex items-center gap-3 text-indigo-400 mb-2">
-                        <CheckCircle2 size={24} />
-                        <span className="font-semibold">Known Skills</span>
-                    </div>
-                    <div className="stat-value">{skills.length}</div>
-                    <div className="stat-label">Verified skills in inventory</div>
-                </div>
-
-                <div className="stat-card glass">
-                    <div className="flex items-center gap-3 text-emerald-400 mb-2">
-                        <TrendingUp size={24} />
-                        <span className="font-semibold">Readiness Score</span>
-                    </div>
-                    <div className="stat-value">68%</div>
-                    <div className="stat-label">Average across top roles</div>
-                </div>
-
-                <div className="stat-card glass">
-                    <div className="flex items-center gap-3 text-amber-400 mb-2">
-                        <AlertCircle size={24} />
-                        <span className="font-semibold">Gaps Identified</span>
-                    </div>
-                    <div className="stat-value">12</div>
-                    <div className="stat-label">Skills to acquire for goals</div>
-                </div>
-            </div>
-
-            <div className="grid lg:grid-cols-2">
-                <div className="glass p-6">
-                    <h3 className="card-title"><Briefcase size={20} className="text-indigo-400" /> Skill Distribution</h3>
-                    <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={[
-                                        { name: 'Technical', value: skills.length },
-                                        { name: 'Interests', value: 3 },
-                                        { name: 'Certified', value: 2 },
-                                    ]}
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    <Cell fill="#6366f1" />
-                                    <Cell fill="#10b981" />
-                                    <Cell fill="#f59e0b" />
-                                </Pie>
-                                <Tooltip />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                <div className="glass p-6">
-                    <h3 className="card-title"><GraduationCap size={20} className="text-indigo-400" /> Recent Skills</h3>
-                    <div className="flex flex-wrap gap-2 mt-4">
-                        {skills.length > 0 ? skills.map((skill, idx) => (
-                            <span key={idx} className="badge bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 py-1.5">
-                                {skill}
-                            </span>
-                        )) : <p className="text-slate-500">No skills added yet. Update your profile!</p>}
-                    </div>
-                </div>
-            </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="spinner" style={{ margin: '0 auto 16px' }} />
+          <p className="page-subtitle">Loading your dashboard...</p>
         </div>
+      </div>
     );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      <motion.div className="page-header" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} style={{ marginBottom: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <div className="live-indicator-icon">
+            <Zap size={16} color="white" />
+          </div>
+          <span className="badge badge-success">Live Dashboard</span>
+        </div>
+        <h1 className="page-title">Welcome back, {profile?.full_name?.split(' ')[0] || 'Student'}</h1>
+        <p className="page-subtitle">Here is your current skill inventory and readiness progress.</p>
+      </motion.div>
+
+      <div className="grid-auto">
+        <StatCard icon={<CheckCircle2 size={22} />} label="Known Skills" value={skills.length} sub="Skills in your current profile" color="#0ea5e9" delay={0} />
+        <StatCard icon={<TrendingUp size={22} />} label="Readiness Score" value={gapSummary.readiness} suffix="%" sub="Based on latest role analysis" color="#16a34a" delay={0.08} />
+        <StatCard icon={<AlertCircle size={22} />} label="Gaps Identified" value={gapSummary.gaps} sub="Missing skills in analyzed role" color="#f59e0b" delay={0.16} />
+      </div>
+
+      <div className="grid-2">
+        <motion.div className="glass card" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25, duration: 0.4 }}>
+          <h3 className="card-title">
+            <Briefcase size={18} style={{ color: 'var(--primary)' }} />
+            Profile Distribution
+          </h3>
+          <div style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={pieData} innerRadius={58} outerRadius={82} paddingAngle={4} dataKey="value" strokeWidth={0}>
+                  {pieData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip content={<DashboardTooltip />} />
+                <Legend iconType="circle" iconSize={8} formatter={(value) => <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{value}</span>} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+
+        <motion.div className="glass card" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3, duration: 0.4 }}>
+          <h3 className="card-title" style={{ justifyContent: 'space-between' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <GraduationCap size={18} style={{ color: 'var(--primary)' }} />
+              My Skills
+            </span>
+            <span className="badge badge-primary">{skills.length} total</span>
+          </h3>
+
+          {skills.length ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {skills.map((skill, index) => (
+                <motion.span key={skill} className="skill-tag" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.35 + index * 0.04 }}>
+                  {skill}
+                </motion.span>
+              ))}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)' }}>
+              <GraduationCap size={36} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
+              <p style={{ fontSize: '0.875rem' }}>No skills added yet.</p>
+              <p style={{ fontSize: '0.8rem', marginTop: 4 }}>Go to My Profile to add your academic and skill details.</p>
+            </div>
+          )}
+        </motion.div>
+      </div>
+    </div>
+  );
 };
 
 export default StudentDashboard;

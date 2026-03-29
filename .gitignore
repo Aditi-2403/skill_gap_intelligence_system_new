@@ -1,0 +1,16 @@
+# Local tooling and editor artifacts
+.tools/
+.codex/
+.vscode/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Local data and notes
+sql_app.db
+walkthrough.md
+/package-lock.json
