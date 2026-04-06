@@ -1,9 +1,16 @@
 import axios from 'axios';
 
-const inferredBaseUrl =
-  typeof window !== 'undefined' && window.location.port === '5174'
-    ? `${window.location.protocol}//${window.location.hostname}:8000`
-    : '';
+const inferLocalApiBaseUrl = () => {
+  if (typeof window === 'undefined') return '';
+  const host = window.location.hostname;
+  const port = window.location.port || '';
+  const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+  const isViteDevPort = /^517\d$/.test(port);
+  if (!isLocalHost || !isViteDevPort) return '';
+  return `${window.location.protocol}//127.0.0.1:8000`;
+};
+
+const inferredBaseUrl = inferLocalApiBaseUrl();
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || inferredBaseUrl,
@@ -24,6 +31,9 @@ apiClient.interceptors.response.use(
     if (error?.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+    }
+    if (!error?.response) {
+      error.message = 'Unable to reach server. Please check backend connection and try again.';
     }
     return Promise.reject(error);
   },

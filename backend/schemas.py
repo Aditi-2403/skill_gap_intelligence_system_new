@@ -15,8 +15,8 @@ class UserCreate(UserBase):
     @classmethod
     def validate_role(cls, value: Optional[str]) -> str:
         normalized = (value or "student").lower().strip()
-        if normalized not in {"student", "admin"}:
-            raise ValueError("Role must be either 'student' or 'admin'.")
+        if normalized != "student":
+            raise ValueError("Only 'student' role is allowed during signup.")
         return normalized
 
 
@@ -55,6 +55,34 @@ class ProfileResponse(ProfileBase):
     user_id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SkillLevelInput(BaseModel):
+    skill: str = Field(min_length=1, max_length=120)
+    level: int = Field(ge=1, le=10)
+
+
+class StudentSkillResponse(SkillLevelInput):
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AnalysisPreferencesUpdate(BaseModel):
+    target_domain: Optional[str] = None
+    target_role: Optional[str] = None
+    skill_levels: list[SkillLevelInput] = Field(default_factory=list)
+
+
+class AnalysisPreferencesResponse(BaseModel):
+    target_domain: Optional[str] = None
+    target_role: Optional[str] = None
+    skill_levels: list[SkillLevelInput] = Field(default_factory=list)
+
+
+class SkillGapRequest(BaseModel):
+    domain_name: Optional[str] = None
+    role_name: str = Field(min_length=2, max_length=120)
+    student_skills: list[str] = Field(default_factory=list)
+    skill_levels: list[SkillLevelInput] = Field(default_factory=list)
 
 
 class Token(BaseModel):

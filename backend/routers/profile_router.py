@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from .. import auth, database, models, schemas, utils
 from ..core.config import get_settings
-from ..services import profile_service
+from ..services import analysis_service, profile_service
 
 
 router = APIRouter(tags=["profile"])
@@ -25,6 +25,77 @@ def get_profile(
     db: Session = Depends(database.get_db),
 ):
     return profile_service.ensure_profile(user_id=current_user.id, db=db)
+
+
+@router.get("/profile/analysis-preferences", response_model=schemas.AnalysisPreferencesResponse)
+def get_analysis_preferences(
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db),
+):
+    _ = profile_service.ensure_profile(user_id=current_user.id, db=db)
+    target_domain = profile_service.get_target_domain(user_id=current_user.id, db=db)
+    target_role = profile_service.get_target_role(user_id=current_user.id, db=db)
+    skill_levels = profile_service.get_student_skill_levels(user_id=current_user.id, db=db)
+
+    return {
+        "target_domain": target_domain,
+        "target_role": target_role,
+        "skill_levels": [
+            {"skill": skill, "level": level}
+            for skill, level in sorted(skill_levels.items())
+        ],
+    }
+
+
+@router.post("/profile/analysis-preferences", response_model=schemas.AnalysisPreferencesResponse)
+def update_analysis_preferences(
+    payload: schemas.AnalysisPreferencesUpdate,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db),
+):
+    _ = profile_service.ensure_profile(user_id=current_user.id, db=db)
+
+    if payload.target_domain:
+        domains = {domain["domain"] for domain in analysis_service.get_domains()}
+        if payload.target_domain not in domains:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid target_domain. Choose one of: {', '.join(sorted(domains))}",
+            )
+        profile_service.set_target_domain(user_id=current_user.id, target_domain=payload.target_domain, db=db)
+
+    if payload.target_role:
+        selected_domain = payload.target_domain or profile_service.get_target_domain(user_id=current_user.id, db=db)
+        role_map = {
+            role["role"].lower(): role["role"]
+            for role in analysis_service.get_roles(domain_name=selected_domain)
+        }
+        normalized_role = role_map.get(payload.target_role.strip().lower())
+        if normalized_role is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid target_role. Choose one of: {', '.join(sorted(role_map.values()))}",
+            )
+        profile_service.set_target_role(user_id=current_user.id, target_role=normalized_role, db=db)
+
+    if payload.skill_levels:
+        profile_service.upsert_student_skill_levels(
+            user_id=current_user.id,
+            skill_levels=payload.skill_levels,
+            db=db,
+        )
+
+    target_domain = profile_service.get_target_domain(user_id=current_user.id, db=db)
+    target_role = profile_service.get_target_role(user_id=current_user.id, db=db)
+    skill_levels = profile_service.get_student_skill_levels(user_id=current_user.id, db=db)
+    return {
+        "target_domain": target_domain,
+        "target_role": target_role,
+        "skill_levels": [
+            {"skill": skill, "level": level}
+            for skill, level in sorted(skill_levels.items())
+        ],
+    }
 
 
 @router.post("/resume-upload")

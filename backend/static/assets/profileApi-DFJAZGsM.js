@@ -1,1 +1,0 @@
-import{b as e}from"./index-D5MBUZy6.js";const t=async()=>(await e.get("/profile")).data,r=async s=>(await e.post("/profile",s)).data,n=async s=>(await e.post("/resume-upload",s)).data;export{n as a,t as g,r as u};

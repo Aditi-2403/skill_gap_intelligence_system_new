@@ -1,6 +1,25 @@
 # Skill Gap Intelligence System
 
-## Run (Local Toolchain)
+## Run (One Command)
+
+From project root:
+
+```powershell
+.\start.cmd
+```
+
+This starts backend + frontend automatically (and reuses already running ports if available).
+If you prefer PowerShell directly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
+```
+
+Default URLs:
+- Frontend: http://127.0.0.1:5175
+- Backend: http://127.0.0.1:8000
+
+## Run (Local Toolchain - Manual)
 
 1. Start backend API (includes DB + static frontend serving):
 

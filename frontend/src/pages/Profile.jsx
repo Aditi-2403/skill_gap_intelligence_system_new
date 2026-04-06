@@ -1,44 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, CheckCircle, Save, Upload, X } from 'lucide-react';
+import { AlertCircle, CheckCircle, Save, SlidersHorizontal, Upload, X } from 'lucide-react';
 
-import { getProfile, uploadResume, upsertProfile } from '../api/profileApi';
-
-const CompletionRing = ({ pct }) => {
-  const radius = 36;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (circumference * pct) / 100;
-
-  return (
-    <div style={{ position: 'relative', width: 88, height: 88, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <svg width="88" height="88" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx="44" cy="44" r={radius} stroke="rgba(17, 24, 39, 0.08)" strokeWidth="6" fill="none" />
-        <circle
-          cx="44"
-          cy="44"
-          r={radius}
-          stroke={pct >= 80 ? '#16a34a' : pct >= 50 ? '#0ea5e9' : '#f59e0b'}
-          strokeWidth="6"
-          fill="none"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)' }}
-        />
-      </svg>
-      <span className="completion-pct">{pct}%</span>
-    </div>
-  );
-};
-
-const YEAR_OPTIONS = [
-  { label: '1st Year', value: '1' },
-  { label: '2nd Year', value: '2' },
-  { label: '3rd Year', value: '3' },
-  { label: '4th Year', value: '4' },
-];
+import { getDomains, getIndustryRoles } from '../api/analysisApi';
+import {
+  getAnalysisPreferences,
+  getProfile,
+  updateAnalysisPreferences,
+  uploadResume,
+  upsertProfile,
+} from '../api/profileApi';
 
 const Profile = () => {
+  const asText = (value) => (typeof value === 'string' ? value : '');
+
   const [formData, setFormData] = useState({
     full_name: '',
     cgpa: '',
@@ -49,64 +24,124 @@ const Profile = () => {
     projects: '',
     internships: '',
   });
+  const [domains, setDomains] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [preferences, setPreferences] = useState({
+    target_domain: '',
+    target_role: '',
+    skill_levels: [],
+  });
   const [skillInput, setSkillInput] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [dragging, setDragging] = useState(false);
   const [toast, setToast] = useState(null);
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const fileRef = useRef(null);
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const profile = await getProfile();
-        setFormData({ ...profile, cgpa: String(profile.cgpa || '') });
-      } catch {
-        // Ignore first-time profile setup errors.
-      }
-    };
-
-    loadProfile();
-  }, []);
-
-  const skills = formData.skills
-    ? formData.skills
-        .split(',')
-        .map((skill) => skill.trim())
-        .filter(Boolean)
-    : [];
+  const skills = asText(formData.skills)
+    .split(',')
+    .map((skill) => skill.trim())
+    .filter(Boolean);
 
   const showToast = (type, message) => {
     setToast({ type, message });
-    window.setTimeout(() => setToast(null), 3500);
+    window.setTimeout(() => setToast(null), 3400);
   };
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setFormData((current) => ({ ...current, [name]: value }));
-  };
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [profileData, domainRows, prefRows] = await Promise.all([
+          getProfile().catch(() => null),
+          getDomains(),
+          getAnalysisPreferences().catch(() => null),
+        ]);
 
-  const handleSubmit = async (event) => {
+        if (profileData) {
+          setFormData({
+            ...profileData,
+            full_name: asText(profileData.full_name),
+            branch: asText(profileData.branch),
+            skills: asText(profileData.skills),
+            certifications: asText(profileData.certifications),
+            projects: asText(profileData.projects),
+            internships: asText(profileData.internships),
+            cgpa: String(profileData.cgpa || ''),
+            year: String(profileData.year || 1),
+          });
+        }
+
+        setDomains(domainRows || []);
+        const fallbackDomain = asText(prefRows?.target_domain) || domainRows?.[0]?.domain || '';
+        setPreferences((current) => ({
+          ...current,
+          target_domain: fallbackDomain,
+          target_role: asText(prefRows?.target_role),
+          skill_levels: Array.isArray(prefRows?.skill_levels) ? prefRows.skill_levels : [],
+        }));
+      } catch {
+        showToast('error', 'Unable to load profile setup.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  useEffect(() => {
+    if (!preferences.target_domain) return;
+    const loadRoles = async () => {
+      try {
+        const roleRows = await getIndustryRoles(preferences.target_domain);
+        setRoles(roleRows || []);
+        if ((!preferences.target_role || !roleRows?.some((row) => row.role === preferences.target_role)) && roleRows?.length) {
+          setPreferences((current) => ({ ...current, target_role: roleRows[0].role }));
+        }
+      } catch {
+        setRoles([]);
+      }
+    };
+    loadRoles();
+  }, [preferences.target_domain]);
+
+  useEffect(() => {
+    setPreferences((current) => {
+      const existingMap = Object.fromEntries((current.skill_levels || []).map((row) => [row.skill.toLowerCase(), row.level]));
+      const merged = skills.map((skill) => ({ skill, level: existingMap[skill.toLowerCase()] || 5 }));
+      return { ...current, skill_levels: merged };
+    });
+  }, [formData.skills]);
+
+  const onSubmit = async (event) => {
     event.preventDefault();
+    if (!preferences.target_domain || !preferences.target_role) {
+      showToast('error', 'Please select target domain and target role.');
+      return;
+    }
+    setSaving(true);
     try {
       await upsertProfile({
         ...formData,
         cgpa: Number.parseFloat(formData.cgpa) || 0,
         year: Number.parseInt(formData.year, 10) || 1,
       });
-      showToast('success', 'Profile saved successfully.');
-    } catch {
-      showToast('error', 'Unable to save profile. Please try again.');
+      await updateAnalysisPreferences(preferences);
+      showToast('success', 'Profile and preferences saved.');
+    } catch (error) {
+      showToast('error', error?.response?.data?.detail || 'Unable to save profile.');
+    } finally {
+      setSaving(false);
     }
   };
 
   const addSkill = () => {
-    const nextSkill = skillInput.trim();
-    if (!nextSkill || skills.includes(nextSkill)) {
+    const next = skillInput.trim();
+    if (!next || skills.includes(next)) {
       setSkillInput('');
       return;
     }
-
-    setFormData((current) => ({ ...current, skills: [...skills, nextSkill].join(', ') }));
+    setFormData((current) => ({ ...current, skills: [...skills, next].join(', ') }));
     setSkillInput('');
   };
 
@@ -117,13 +152,6 @@ const Profile = () => {
     }));
   };
 
-  const handleSkillKeyDown = (event) => {
-    if (event.key === 'Enter' || event.key === ',') {
-      event.preventDefault();
-      addSkill();
-    }
-  };
-
   const handleFiles = async (files) => {
     const file = files?.[0];
     if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
@@ -131,147 +159,165 @@ const Profile = () => {
       return;
     }
 
-    const formDataToSend = new FormData();
-    formDataToSend.append('file', file);
-
+    const payload = new FormData();
+    payload.append('file', file);
     setUploading(true);
     try {
-      const result = await uploadResume(formDataToSend);
+      const result = await uploadResume(payload);
       const extractedSkills = result.extracted_skills || [];
-      const mergedSkills = Array.from(new Set([...skills, ...extractedSkills])).join(', ');
-      setFormData((current) => ({ ...current, skills: mergedSkills }));
-      showToast('success', `Extracted ${extractedSkills.length} skills from resume.`);
+      const merged = Array.from(new Set([...skills, ...extractedSkills]));
+      setFormData((current) => ({ ...current, skills: merged.join(', ') }));
+      showToast('success', `Extracted ${extractedSkills.length} skills.`);
     } catch {
-      showToast('error', 'Resume parsing failed. Please try another PDF.');
+      showToast('error', 'Resume parsing failed.');
     } finally {
       setUploading(false);
     }
   };
 
-  const completionCount = Object.values(formData).filter((value) => value && value !== '1').length;
-  const completionPct = Math.round((completionCount / 8) * 100);
+  const setSkillLevel = (skill, level) => {
+    setPreferences((current) => ({
+      ...current,
+      skill_levels: current.skill_levels.map((row) => (row.skill === skill ? { ...row, level } : row)),
+    }));
+  };
 
   return (
-    <div className="profile-page">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <AnimatePresence>
         {toast && (
           <motion.div
             className={`alert alert-${toast.type === 'success' ? 'success' : 'danger'}`}
-            style={{ position: 'fixed', top: 20, right: 24, zIndex: 999, minWidth: 280, boxShadow: 'var(--shadow-soft)' }}
-            initial={{ opacity: 0, y: -20, x: 20 }}
-            animate={{ opacity: 1, y: 0, x: 0 }}
-            exit={{ opacity: 0, y: -20, x: 20 }}
+            style={{ position: 'fixed', top: 20, right: 20, zIndex: 900 }}
+            initial={{ opacity: 0, y: -14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -14 }}
           >
-            {toast.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+            {toast.type === 'success' ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
             {toast.message}
           </motion.div>
         )}
       </AnimatePresence>
 
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 32 }}>
-        <h1 className="page-title">My Academic Profile</h1>
-        <p className="page-subtitle">Keep your details updated for accurate and personalized skill-gap analysis.</p>
-      </motion.div>
+      <div>
+        <h1 className="page-title">Universal Profile Setup</h1>
+        <p className="page-subtitle">Set your academic details, domain path, role target, and skill levels.</p>
+      </div>
 
-      <div className="profile-layout">
-        <motion.form onSubmit={handleSubmit} className="glass card" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1, duration: 0.4 }} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {loading && (
+        <div className="glass card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 220 }}>
+          <div style={{ textAlign: 'center' }}>
+            <div className="spinner" style={{ margin: '0 auto 12px' }} />
+            <p className="page-subtitle">Loading your profile...</p>
+          </div>
+        </div>
+      )}
+
+      {!loading && (
+
+      <form onSubmit={onSubmit} className="profile-layout">
+        <section className="glass card">
           <div className="grid-2">
             <div className="form-group">
               <label className="form-label">Full Name</label>
-              <input name="full_name" value={formData.full_name} onChange={handleChange} className="input-field" placeholder="John Doe" required />
+              <input className="input-field" name="full_name" value={formData.full_name} onChange={(event) => setFormData((current) => ({ ...current, full_name: event.target.value }))} required />
             </div>
             <div className="form-group">
               <label className="form-label">Branch / Department</label>
-              <input name="branch" value={formData.branch} onChange={handleChange} className="input-field" placeholder="Computer Science" required />
+              <input className="input-field" name="branch" value={formData.branch} onChange={(event) => setFormData((current) => ({ ...current, branch: event.target.value }))} required />
             </div>
           </div>
 
           <div className="grid-2">
             <div className="form-group">
               <label className="form-label">CGPA</label>
-              <input name="cgpa" type="number" step="0.01" min="0" max="10" value={formData.cgpa} onChange={handleChange} className="input-field" placeholder="8.50" required />
+              <input type="number" step="0.01" min="0" max="10" className="input-field" value={formData.cgpa} onChange={(event) => setFormData((current) => ({ ...current, cgpa: event.target.value }))} required />
             </div>
             <div className="form-group">
-              <label className="form-label">Year of Study</label>
-              <select name="year" value={formData.year} onChange={handleChange} className="input-field">
-                {YEAR_OPTIONS.map((year) => (
-                  <option key={year.value} value={year.value}>
-                    {year.label}
-                  </option>
+              <label className="form-label">Year</label>
+              <select className="input-field" value={formData.year} onChange={(event) => setFormData((current) => ({ ...current, year: event.target.value }))}>
+                <option value="1">1st Year</option>
+                <option value="2">2nd Year</option>
+                <option value="3">3rd Year</option>
+                <option value="4">4th Year</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid-2">
+            <div className="form-group">
+              <label className="form-label">Target Domain</label>
+              <select className="input-field" value={preferences.target_domain} onChange={(event) => setPreferences((current) => ({ ...current, target_domain: event.target.value, target_role: '' }))}>
+                {domains.map((domain) => (
+                  <option key={domain.domain} value={domain.domain}>{domain.domain}</option>
                 ))}
+                {!domains.length && <option value="">No domain available</option>}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Target Role</label>
+              <select className="input-field" value={preferences.target_role} onChange={(event) => setPreferences((current) => ({ ...current, target_role: event.target.value }))}>
+                {roles.map((role) => (
+                  <option key={role.role} value={role.role}>{role.role}</option>
+                ))}
+                {!roles.length && <option value="">No role available</option>}
               </select>
             </div>
           </div>
 
           <div className="form-group">
             <label className="form-label">Skills</label>
-            <div className="skill-input-surface" onClick={() => document.getElementById('skill-input')?.focus()}>
+            <div className="skill-input-surface">
               {skills.map((skill) => (
                 <span key={skill} className="skill-tag">
                   {skill}
-                  <button type="button" className="remove-btn" onClick={(event) => {
-                    event.stopPropagation();
-                    removeSkill(skill);
-                  }}>
+                  <button
+                    type="button"
+                    className="remove-btn"
+                    onClick={() => removeSkill(skill)}
+                  >
                     <X size={11} />
                   </button>
                 </span>
               ))}
               <input
-                id="skill-input"
                 value={skillInput}
                 onChange={(event) => setSkillInput(event.target.value)}
-                onKeyDown={handleSkillKeyDown}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ',') {
+                    event.preventDefault();
+                    addSkill();
+                  }
+                }}
                 onBlur={addSkill}
                 className="skill-input"
-                placeholder={skills.length === 0 ? 'Type a skill and press Enter...' : 'Add more skills...'}
-                aria-label="Add skill"
+                placeholder={skills.length ? 'Add more skills...' : 'Type a skill and press Enter'}
               />
             </div>
           </div>
 
           <div className="form-group">
             <label className="form-label">Certifications</label>
-            <input name="certifications" value={formData.certifications} onChange={handleChange} className="input-field" placeholder="AWS, Coursera, Udemy..." />
+            <input className="input-field" value={formData.certifications} onChange={(event) => setFormData((current) => ({ ...current, certifications: event.target.value }))} />
           </div>
           <div className="form-group">
             <label className="form-label">Projects</label>
-            <input name="projects" value={formData.projects} onChange={handleChange} className="input-field" placeholder="Portfolio website, AI chatbot..." />
+            <input className="input-field" value={formData.projects} onChange={(event) => setFormData((current) => ({ ...current, projects: event.target.value }))} />
           </div>
           <div className="form-group">
             <label className="form-label">Internships</label>
-            <input name="internships" value={formData.internships} onChange={handleChange} className="input-field" placeholder="Company name and role" />
+            <input className="input-field" value={formData.internships} onChange={(event) => setFormData((current) => ({ ...current, internships: event.target.value }))} />
           </div>
 
-          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 6 }} disabled={saving}>
             <Save size={16} />
-            Save Profile
+            {saving ? 'Saving...' : 'Save Profile & Preferences'}
           </button>
-        </motion.form>
+        </section>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <motion.section className="glass card" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15, duration: 0.4 }}>
-            <h3 className="card-title" style={{ marginBottom: 16 }}>Profile Completion</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-              <CompletionRing pct={completionPct} />
-              <div>
-                <p className="status-copy">
-                  {completionPct < 50 ? 'Getting started' : completionPct < 80 ? 'Good progress' : 'Profile looks complete'}
-                </p>
-                <p className="status-subcopy">{completionCount} of 8 fields filled</p>
-              </div>
-            </div>
-          </motion.section>
-
-          <motion.section className="glass card" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.22, duration: 0.4 }}>
-            <h3 className="card-title" style={{ marginBottom: 12 }}>
-              <Upload size={16} style={{ color: 'var(--primary)' }} />
-              Resume Skill Extractor
-            </h3>
-            <p className="page-subtitle" style={{ fontSize: '0.8rem', marginBottom: 14 }}>
-              Upload a PDF resume to auto-fill recognized skills.
-            </p>
-
+        <section style={{ display: 'grid', gap: 18 }}>
+          <div className="glass card">
+            <h3 className="card-title"><Upload size={16} style={{ color: 'var(--primary)' }} /> Resume Skill Extractor</h3>
             <div
               className={`upload-zone ${dragging ? 'drag-over' : ''}`}
               onDrop={(event) => {
@@ -287,24 +333,35 @@ const Profile = () => {
               onClick={() => fileRef.current?.click()}
             >
               <input ref={fileRef} type="file" accept=".pdf" style={{ display: 'none' }} onChange={(event) => handleFiles(event.target.files)} />
-              {uploading ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                  <div className="spinner" />
-                  <p className="page-subtitle" style={{ fontSize: '0.8rem' }}>Parsing resume...</p>
-                </div>
-              ) : (
-                <>
-                  <Upload size={28} style={{ color: 'var(--primary)', margin: '0 auto 10px', display: 'block', opacity: 0.8 }} />
-                  <p className="page-subtitle" style={{ fontSize: '0.8rem', marginBottom: 4 }}>
-                    Drag and drop your PDF, or click to browse
-                  </p>
-                  <p className="status-subcopy">PDF only, max 5 MB</p>
-                </>
-              )}
+              {uploading ? <div className="spinner" style={{ margin: '0 auto' }} /> : <p className="page-subtitle">Drop PDF or click to upload</p>}
             </div>
-          </motion.section>
-        </div>
-      </div>
+          </div>
+
+          <div className="glass card">
+            <h3 className="card-title"><SlidersHorizontal size={16} style={{ color: 'var(--primary)' }} /> Skill Levels (1-10)</h3>
+            {preferences.skill_levels.length ? (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {preferences.skill_levels.map((row) => (
+                  <div key={row.skill} className="skill-level-row">
+                    <label>{row.skill}</label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={row.level}
+                      onChange={(event) => setSkillLevel(row.skill, Number.parseInt(event.target.value, 10))}
+                    />
+                    <span className="badge badge-primary">L{row.level}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="page-subtitle">Add skills to start rating your proficiency.</p>
+            )}
+          </div>
+        </section>
+      </form>
+      )}
     </div>
   );
 };

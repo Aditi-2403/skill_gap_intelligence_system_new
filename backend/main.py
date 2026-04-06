@@ -11,11 +11,17 @@ from .core.config import get_settings
 from .core.errors import register_exception_handlers
 from .core.logging import configure_logging
 from .routers import admin_router, analysis_router, auth_router, health_router, profile_router
+from .services import auth_service
 
 
 settings = get_settings()
 logger = configure_logging()
 models.Base.metadata.create_all(bind=database.engine)
+_bootstrap_db = database.SessionLocal()
+try:
+    auth_service.ensure_fixed_admin_account(_bootstrap_db)
+finally:
+    _bootstrap_db.close()
 
 app = FastAPI(
     title=settings.app_name,
@@ -64,6 +70,7 @@ _API_PREFIXES = frozenset(
         "profile",
         "resume-upload",
         "industry-roles",
+        "domains",
         "skill-gap",
         "admin",
         "health",

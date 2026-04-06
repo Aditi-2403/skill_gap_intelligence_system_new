@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, ArrowRight, Lock, Mail, ShieldCheck, Sparkles, UserCog } from 'lucide-react';
 
-import { loginUser, registerUser } from '../api/authApi';
+import { getCurrentUser, loginUser, registerUser } from '../api/authApi';
 
 const Orb = ({ style }) => (
   <div
@@ -22,7 +22,7 @@ const Auth = ({ setToken, setUser }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('student');
+  const [loginRole, setLoginRole] = useState('student');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -35,21 +35,34 @@ const Auth = ({ setToken, setUser }) => {
       if (isLogin) {
         const result = await loginUser({ email, password });
         localStorage.setItem('token', result.access_token);
+        const currentUser = await getCurrentUser();
+
+        if (loginRole === 'admin' && currentUser?.role !== 'admin') {
+          localStorage.removeItem('token');
+          throw new Error('This account is not an administrator account.');
+        }
+        if (loginRole === 'student' && currentUser?.role === 'admin') {
+          localStorage.removeItem('token');
+          throw new Error('Please choose Administrator login for this account.');
+        }
+
+        localStorage.setItem('user', JSON.stringify(currentUser));
+        setUser(currentUser);
         setToken(result.access_token);
       } else {
-        await registerUser({ email, password, role });
+        await registerUser({ email, password, role: 'student' });
         setIsLogin(true);
+        setLoginRole('student');
       }
     } catch (requestError) {
-      setError(requestError?.response?.data?.detail || 'An error occurred. Please try again.');
+      setError(
+        requestError?.response?.data?.detail
+          || requestError?.message
+          || 'An error occurred. Please try again.',
+      );
     } finally {
       setLoading(false);
     }
-  };
-
-  const switchMode = () => {
-    setIsLogin((value) => !value);
-    setError('');
   };
 
   return (
@@ -61,6 +74,29 @@ const Auth = ({ setToken, setUser }) => {
               <ShieldCheck size={18} color="white" />
             </div>
             <span className="brand-title">SkillSync</span>
+          </div>
+
+          <div className="auth-mode-toggle" role="tablist" aria-label="Authentication mode">
+            <button
+              type="button"
+              className={`auth-mode-btn ${isLogin ? 'active' : ''}`}
+              onClick={() => {
+                setIsLogin(true);
+                setError('');
+              }}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              className={`auth-mode-btn ${!isLogin ? 'active' : ''}`}
+              onClick={() => {
+                setIsLogin(false);
+                setError('');
+              }}
+            >
+              Create Account
+            </button>
           </div>
 
           <AnimatePresence mode="wait">
@@ -83,18 +119,27 @@ const Auth = ({ setToken, setUser }) => {
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <AnimatePresence>
-              {!isLogin && (
+              {isLogin && (
                 <motion.div className="form-group" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25 }}>
                   <label className="form-label">
                     <UserCog size={12} style={{ display: 'inline', marginRight: 4 }} />
-                    Account Type
+                    Login As
                   </label>
-                  <div className="input-icon-wrap">
-                    <UserCog size={16} className="input-icon" />
-                    <select value={role} onChange={(event) => setRole(event.target.value)} className="input-field" aria-label="Select account type">
-                      <option value="student">Student</option>
-                      <option value="admin">Administrator</option>
-                    </select>
+                  <div className="auth-role-grid">
+                    <button
+                      type="button"
+                      className={`auth-role-btn ${loginRole === 'student' ? 'active' : ''}`}
+                      onClick={() => setLoginRole('student')}
+                    >
+                      Student Login
+                    </button>
+                    <button
+                      type="button"
+                      className={`auth-role-btn ${loginRole === 'admin' ? 'active' : ''}`}
+                      onClick={() => setLoginRole('admin')}
+                    >
+                      Administrator Login
+                    </button>
                   </div>
                 </motion.div>
               )}
@@ -147,16 +192,6 @@ const Auth = ({ setToken, setUser }) => {
               )}
             </button>
           </form>
-
-          <div className="divider" style={{ margin: '24px 0' }}>
-            or
-          </div>
-          <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            {isLogin ? "Don't have an account?" : 'Already have an account?'}{' '}
-            <button onClick={switchMode} className="auth-switch-btn" type="button">
-              {isLogin ? 'Sign Up' : 'Sign In'}
-            </button>
-          </p>
         </motion.div>
       </div>
 

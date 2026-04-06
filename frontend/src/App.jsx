@@ -16,6 +16,33 @@ const RouteLoader = () => (
   </div>
 );
 
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch() {
+    // Intentional no-op: keep user-facing fallback stable.
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="glass card" style={{ maxWidth: 640, margin: '40px auto', textAlign: 'center' }}>
+          <h2 className="page-title" style={{ fontSize: '1.45rem' }}>Something went wrong</h2>
+          <p className="page-subtitle">Please refresh the page. If the issue continues, restart frontend and backend servers.</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const App = () => {
   const [user, setUser] = useState(() => {
     try {
@@ -26,6 +53,9 @@ const App = () => {
   });
   const [token, setToken] = useState(() => localStorage.getItem('token'));
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === 'undefined' ? true : navigator.onLine,
+  );
 
   useEffect(() => {
     if (!token) return;
@@ -43,6 +73,17 @@ const App = () => {
     syncUser();
   }, [token]);
 
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -50,40 +91,55 @@ const App = () => {
     localStorage.removeItem('user');
   };
 
-  const dashboard = user?.role === 'admin' ? <AdminDashboard /> : <StudentDashboard />;
-
   return (
     <Router>
+      <div className="network-banner" role="status" aria-live="polite">
+        <span className={`status-dot ${isOnline ? 'online' : 'offline'}`} />
+        {isOnline ? 'Connected' : 'Offline mode: check your internet or local server connection'}
+      </div>
       <div className="app-container">
-        {user && (
-          <button
-            className="hamburger-btn"
-            onClick={() => setSidebarOpen((open) => !open)}
-            aria-label="Toggle sidebar navigation"
-          >
-            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        )}
+        <AppErrorBoundary>
+          {user && (
+            <button
+              className="hamburger-btn"
+              onClick={() => setSidebarOpen((open) => !open)}
+              aria-label="Toggle sidebar navigation"
+            >
+              {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          )}
 
-        {user && (
-          <Sidebar user={user} logout={logout} mobileOpen={sidebarOpen} closeMobile={() => setSidebarOpen(false)} />
-        )}
+          {user && (
+            <Sidebar user={user} logout={logout} mobileOpen={sidebarOpen} closeMobile={() => setSidebarOpen(false)} />
+          )}
 
-        {user && sidebarOpen && <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} />}
+          {user && sidebarOpen && <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} />}
 
-        <main className={user ? 'main-content' : 'w-full'} style={!user ? { width: '100%' } : {}}>
-          <Suspense fallback={<RouteLoader />}>
-            <Routes>
-              <Route
-                path="/login"
-                element={!user ? <Auth setToken={setToken} setUser={setUser} /> : <Navigate to="/" />}
-              />
-              <Route path="/" element={user ? dashboard : <Navigate to="/login" />} />
-              <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
-              <Route path="/gap-analysis" element={user ? <SkillGap /> : <Navigate to="/login" />} />
-            </Routes>
-          </Suspense>
-        </main>
+          <main className={user ? 'main-content' : 'w-full'} style={!user ? { width: '100%' } : {}}>
+            <Suspense fallback={<RouteLoader />}>
+              <Routes>
+                <Route
+                  path="/login"
+                  element={!user ? <Auth setToken={setToken} setUser={setUser} /> : <Navigate to="/" />}
+                />
+                <Route
+                  path="/"
+                  element={
+                    user
+                      ? (user.role === 'admin' ? <Navigate to="/batch-overview" /> : <StudentDashboard />)
+                      : <Navigate to="/login" />
+                  }
+                />
+                <Route
+                  path="/batch-overview"
+                  element={user ? (user.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />) : <Navigate to="/login" />}
+                />
+                <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
+                <Route path="/gap-analysis" element={user ? <SkillGap /> : <Navigate to="/login" />} />
+              </Routes>
+            </Suspense>
+          </main>
+        </AppErrorBoundary>
       </div>
     </Router>
   );
@@ -105,24 +161,23 @@ const Sidebar = ({ user, logout, mobileOpen, closeMobile }) => {
 
       <nav style={{ flex: 1 }} aria-label="Primary navigation">
         <div className="sidebar-section-label">Main</div>
-        <NavLink
-          to="/"
-          icon={<LayoutDashboard size={17} />}
-          label="Dashboard"
-          active={location.pathname === '/'}
-          onClick={closeMobile}
-        />
-
         {isAdmin ? (
           <NavLink
-            to="/"
+            to="/batch-overview"
             icon={<BarChart3 size={17} />}
             label="Batch Overview"
-            active={false}
+            active={location.pathname === '/batch-overview' || location.pathname === '/'}
             onClick={closeMobile}
           />
         ) : (
           <>
+            <NavLink
+              to="/"
+              icon={<LayoutDashboard size={17} />}
+              label="Dashboard"
+              active={location.pathname === '/'}
+              onClick={closeMobile}
+            />
             <div className="sidebar-section-label" style={{ marginTop: 16 }}>
               Profile
             </div>

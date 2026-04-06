@@ -5,6 +5,16 @@ export const getProfile = async () => {
   return response.data;
 };
 
+export const getAnalysisPreferences = async () => {
+  const response = await apiClient.get('/profile/analysis-preferences');
+  return response.data;
+};
+
+export const updateAnalysisPreferences = async (payload) => {
+  const response = await apiClient.post('/profile/analysis-preferences', payload);
+  return response.data;
+};
+
 export const upsertProfile = async (payload) => {
   const response = await apiClient.post('/profile', payload);
   return response.data;
