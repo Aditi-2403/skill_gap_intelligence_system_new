@@ -1,24 +1,54 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Layers, TrendingUp, Users } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Layers, Trash2, TrendingUp, Users } from 'lucide-react';
 
-import { getAdminDashboard } from '../api/adminApi';
+import { deleteAdminStudent, getAdminDashboard } from '../api/adminApi';
 
 const AdminDashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [deletingStudentId, setDeletingStudentId] = useState(null);
+
+  const loadDashboard = async ({ showLoader = false } = {}) => {
+    if (showLoader) setLoading(true);
+    setError('');
+    try {
+      const result = await getAdminDashboard();
+      setData(result);
+    } catch (requestError) {
+      setError(
+        requestError?.response?.data?.detail
+        || requestError?.message
+        || 'Unable to load admin dashboard data.',
+      );
+    } finally {
+      if (showLoader) setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const result = await getAdminDashboard();
-        setData(result);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
+    loadDashboard({ showLoader: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDeleteStudent = async (student) => {
+    const confirmed = window.confirm(`Delete student "${student?.name || student?.email}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingStudentId(student.id);
+      await deleteAdminStudent(student.id);
+      await loadDashboard();
+    } catch (requestError) {
+      setError(
+        requestError?.response?.data?.detail
+        || requestError?.message
+        || 'Unable to delete this student right now.',
+      );
+    } finally {
+      setDeletingStudentId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -35,6 +65,12 @@ const AdminDashboard = () => {
         <h1 className="page-title">Cross-Domain Overview</h1>
         <p className="page-subtitle">Performance and risk trends across all supported domains.</p>
       </motion.div>
+      {error && (
+        <div className="alert alert-danger" style={{ width: 'fit-content', maxWidth: '100%' }}>
+          <AlertCircle size={15} />
+          {error}
+        </div>
+      )}
 
       <div className="admin-stats-grid">
         <div className="glass admin-stat-card">
@@ -84,6 +120,44 @@ const AdminDashboard = () => {
           </div>
         </section>
       </div>
+
+      <section className="glass card">
+        <h3 className="card-title"><Users size={18} style={{ color: 'var(--primary)' }} /> Student Directory ({data?.total_students || 0})</h3>
+        <p className="page-subtitle" style={{ marginTop: -8, marginBottom: 12 }}>
+          View all students and remove records when needed.
+        </p>
+        <div style={{ display: 'grid', gap: 10 }}>
+          {(data?.students || []).map((student) => (
+            <div key={student.id} className="list-row student-list-row" style={{ alignItems: 'center' }}>
+              <div className="student-list-meta">
+                <strong>{student.name || 'N/A'}</strong>
+                <span>
+                  {student.email}
+                  {' • '}
+                  {student.domain || 'Not selected'}
+                  {' • '}
+                  {student.target_role || 'Not selected'}
+                  {' • '}
+                  CGPA {student.cgpa ?? 0}
+                  {' • '}
+                  Readiness {student.readiness_score ?? 0}%
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => handleDeleteStudent(student)}
+                disabled={deletingStudentId === student.id}
+                style={{ minWidth: 120 }}
+              >
+                <Trash2 size={14} />
+                {deletingStudentId === student.id ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          ))}
+          {!data?.students?.length && <p className="page-subtitle">No students found.</p>}
+        </div>
+      </section>
     </div>
   );
 };
