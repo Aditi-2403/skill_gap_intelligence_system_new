@@ -1,0 +1,68 @@
+{
+  "rewrites": [
+    {
+      "source": "/register",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/register"
+    },
+    {
+      "source": "/token",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/token"
+    },
+    {
+      "source": "/users/:path*",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/users/:path*"
+    },
+    {
+      "source": "/users",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/users"
+    },
+    {
+      "source": "/profile/:path*",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/profile/:path*"
+    },
+    {
+      "source": "/profile",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/profile"
+    },
+    {
+      "source": "/resume-upload",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/resume-upload"
+    },
+    {
+      "source": "/resume-upload/:path*",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/resume-upload/:path*"
+    },
+    {
+      "source": "/industry-roles/:path*",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/industry-roles/:path*"
+    },
+    {
+      "source": "/industry-roles",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/industry-roles"
+    },
+    {
+      "source": "/skill-gap/:path*",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/skill-gap/:path*"
+    },
+    {
+      "source": "/skill-gap",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/skill-gap"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/admin/:path*"
+    },
+    {
+      "source": "/admin",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/admin"
+    },
+    {
+      "source": "/health",
+      "destination": "https://skill-gap-intelligence-system-new.onrender.com/health"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
