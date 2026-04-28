@@ -23,4 +23,7 @@ def health_check(db: Session = Depends(database.get_db)):
         "status": "healthy" if db_status == "connected" else "degraded",
         "version": settings.app_version,
         "database": db_status,
+        "database_engine": settings.database_engine,
+        "database_location": settings.database_location,
+        "database_source": "DATABASE_URL" if settings.database_url_from_env else "default_sqlite_fallback",
     }

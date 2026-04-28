@@ -11,9 +11,10 @@ const inferLocalApiBaseUrl = () => {
 };
 
 const inferredBaseUrl = inferLocalApiBaseUrl();
+const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || inferredBaseUrl,
+  baseURL: configuredBaseUrl || inferredBaseUrl,
   timeout: 15000,
 });
 

@@ -14,3 +14,7 @@ node_modules/
 sql_app.db
 walkthrough.md
 /package-lock.json
+
+# Environment
+.venv/
+.env*
