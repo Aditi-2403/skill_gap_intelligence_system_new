@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 
 from .. import auth, models, schemas
 
-FIXED_ADMIN_EMAIL = "skillsync@gmail.com"
-FIXED_ADMIN_PASSWORD = "skillsync@121"
+FIXED_ADMIN_EMAIL = "Antariksh@gmail.com"
+FIXED_ADMIN_PASSWORD = "Antariksh121"
 
 
 def ensure_fixed_admin_account(db: Session) -> None:
