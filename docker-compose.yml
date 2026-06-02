@@ -1,0 +1,20 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://skill_user:skill_pass@db:5432/skill_gap_db
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: skill_user
+      POSTGRES_PASSWORD: skill_pass
+      POSTGRES_DB: skill_gap_db
+    ports:
+      - "5432:5432"
