@@ -55,3 +55,13 @@ Set-Location D:\devops-project\skill_gap_intelligence_system_new
   - `database_engine` (example: `postgresql` or `sqlite`)
   - `database_location` (example: `hostname/database_name` or local sqlite path)
   - `database_source` (`DATABASE_URL` or `default_sqlite_fallback`)
+
+## Docker Setup
+
+docker compose up --build
+
+Backend:
+http://localhost:8000
+
+Swagger Docs:
+http://localhost:8000/docs
