@@ -91,6 +91,16 @@ const App = () => {
     localStorage.removeItem('user');
   };
 
+  const renderAuthRoute = (initialMode) => (
+    !user ? <Auth setToken={setToken} setUser={setUser} initialMode={initialMode} /> : <Navigate to="/" />
+  );
+
+  const renderLearnerRoute = (element) => {
+    if (!user) return <Navigate to="/login" />;
+    if (user.role === 'admin') return <Navigate to="/batch-overview" />;
+    return element;
+  };
+
   return (
     <Router>
       <div className="network-banner" role="status" aria-live="polite">
@@ -120,7 +130,27 @@ const App = () => {
               <Routes>
                 <Route
                   path="/login"
-                  element={!user ? <Auth setToken={setToken} setUser={setUser} /> : <Navigate to="/" />}
+                  element={renderAuthRoute('login')}
+                />
+                <Route
+                  path="/signup"
+                  element={renderAuthRoute('register')}
+                />
+                <Route
+                  path="/verify-email"
+                  element={renderAuthRoute('verify')}
+                />
+                <Route
+                  path="/resend-verification"
+                  element={renderAuthRoute('resend')}
+                />
+                <Route
+                  path="/forgot-password"
+                  element={renderAuthRoute('forgot')}
+                />
+                <Route
+                  path="/reset-password"
+                  element={renderAuthRoute('reset')}
                 />
                 <Route
                   path="/"
@@ -134,8 +164,8 @@ const App = () => {
                   path="/batch-overview"
                   element={user ? (user.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />) : <Navigate to="/login" />}
                 />
-                <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
-                <Route path="/gap-analysis" element={user ? <SkillGap /> : <Navigate to="/login" />} />
+                <Route path="/profile" element={renderLearnerRoute(<Profile />)} />
+                <Route path="/gap-analysis" element={renderLearnerRoute(<SkillGap />)} />
               </Routes>
             </Suspense>
           </main>
