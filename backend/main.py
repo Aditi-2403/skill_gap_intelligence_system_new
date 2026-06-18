@@ -11,12 +11,13 @@ from .core.config import get_settings
 from .core.errors import register_exception_handlers
 from .core.logging import configure_logging
 from .routers import admin_router, analysis_router, auth_router, health_router, profile_router
-from .services import auth_service
+from .services import auth_service, database_schema_service
 
 
 settings = get_settings()
 logger = configure_logging()
 models.Base.metadata.create_all(bind=database.engine)
+database_schema_service.ensure_auth_schema(database.engine)
 _bootstrap_db = database.SessionLocal()
 try:
     auth_service.ensure_fixed_admin_account(_bootstrap_db)

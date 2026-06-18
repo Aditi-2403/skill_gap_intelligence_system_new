@@ -22,7 +22,7 @@ def get_domains():
 def get_skill_gap(
     role_name: str,
     domain: str | None = None,
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.get_current_learner),
     db: Session = Depends(database.get_db),
 ):
     profile = profile_service.get_profile_by_user_id(user_id=current_user.id, db=db)
@@ -46,7 +46,7 @@ def get_skill_gap(
 
 @router.get("/skill-gap")
 def get_skill_gap_for_target_role(
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.get_current_learner),
     db: Session = Depends(database.get_db),
 ):
     profile = profile_service.get_profile_by_user_id(user_id=current_user.id, db=db)
@@ -71,7 +71,10 @@ def get_skill_gap_for_target_role(
 
 
 @router.post("/skill-gap/analyze")
-def analyze_skill_gap_payload(payload: schemas.SkillGapRequest):
+def analyze_skill_gap_payload(
+    payload: schemas.SkillGapRequest,
+    current_user: models.User = Depends(auth.get_current_learner),
+):
     return analysis_service.analyze_skill_gap(
         role_name=payload.role_name,
         domain_name=payload.domain_name,

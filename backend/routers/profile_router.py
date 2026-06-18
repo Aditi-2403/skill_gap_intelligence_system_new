@@ -13,7 +13,7 @@ settings = get_settings()
 @router.post("/profile", response_model=schemas.ProfileResponse)
 def upsert_profile(
     profile: schemas.ProfileCreate,
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.get_current_learner),
     db: Session = Depends(database.get_db),
 ):
     return profile_service.upsert_profile(profile=profile, user_id=current_user.id, db=db)
@@ -21,7 +21,7 @@ def upsert_profile(
 
 @router.get("/profile", response_model=schemas.ProfileResponse)
 def get_profile(
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.get_current_learner),
     db: Session = Depends(database.get_db),
 ):
     return profile_service.ensure_profile(user_id=current_user.id, db=db)
@@ -29,7 +29,7 @@ def get_profile(
 
 @router.get("/profile/analysis-preferences", response_model=schemas.AnalysisPreferencesResponse)
 def get_analysis_preferences(
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.get_current_learner),
     db: Session = Depends(database.get_db),
 ):
     _ = profile_service.ensure_profile(user_id=current_user.id, db=db)
@@ -50,7 +50,7 @@ def get_analysis_preferences(
 @router.post("/profile/analysis-preferences", response_model=schemas.AnalysisPreferencesResponse)
 def update_analysis_preferences(
     payload: schemas.AnalysisPreferencesUpdate,
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.get_current_learner),
     db: Session = Depends(database.get_db),
 ):
     _ = profile_service.ensure_profile(user_id=current_user.id, db=db)
@@ -101,7 +101,7 @@ def update_analysis_preferences(
 @router.post("/resume-upload")
 async def upload_resume(
     file: UploadFile = File(...),
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(auth.get_current_learner),
 ):
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(

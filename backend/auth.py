@@ -12,12 +12,15 @@ from .core.config import get_settings
 
 
 settings = get_settings()
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        return False
 
 
 def get_password_hash(password: str) -> str:
@@ -58,10 +61,32 @@ async def get_current_user(
     return user
 
 
+async def get_current_verified_user(
+    current_user: models.User = Depends(get_current_user),
+) -> models.User:
+    if not current_user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before continuing.",
+        )
+    return current_user
+
+
 async def get_current_admin(current_user: models.User = Depends(get_current_user)) -> models.User:
     if current_user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Administrator access required",
+        )
+    return current_user
+
+
+async def get_current_learner(
+    current_user: models.User = Depends(get_current_verified_user),
+) -> models.User:
+    if current_user.role != "learner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Learner access required",
         )
     return current_user

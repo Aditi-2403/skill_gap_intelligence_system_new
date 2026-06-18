@@ -9,7 +9,7 @@ from . import analysis_service, profile_service
 def get_admin_dashboard_data(db: Session, student_limit: int = 1000) -> dict:
     total_students = (
         db.query(func.count(models.User.id))
-        .filter(models.User.role == "student")
+        .filter(models.User.role == "learner")
         .scalar()
         or 0
     )
@@ -19,7 +19,7 @@ def get_admin_dashboard_data(db: Session, student_limit: int = 1000) -> dict:
 
     users = (
         db.query(models.User)
-        .filter(models.User.role == "student")
+        .filter(models.User.role == "learner")
         .options(joinedload(models.User.profile))
         .limit(max(1, min(student_limit, 1000)))
         .all()
@@ -32,7 +32,7 @@ def get_admin_dashboard_data(db: Session, student_limit: int = 1000) -> dict:
             func.avg(models.Profile.cgpa).label("avg_cgpa"),
         )
         .join(models.User, models.User.id == models.Profile.user_id)
-        .filter(models.User.role == "student")
+        .filter(models.User.role == "learner")
         .group_by(models.Profile.branch)
         .order_by(func.count(models.Profile.id).desc())
         .all()
@@ -135,7 +135,7 @@ def get_admin_dashboard_data(db: Session, student_limit: int = 1000) -> dict:
 
 def delete_student_by_id(db: Session, student_id: int) -> dict:
     student = db.query(models.User).filter(models.User.id == student_id).first()
-    if not student or student.role != "student":
+    if not student or student.role != "learner":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Student not found.",

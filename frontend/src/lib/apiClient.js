@@ -11,7 +11,7 @@ const inferLocalApiBaseUrl = () => {
 };
 
 const inferredBaseUrl = inferLocalApiBaseUrl();
-const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\\n/g, '').replace(/\/+$/, '');
 
 const apiClient = axios.create({
   baseURL: configuredBaseUrl || inferredBaseUrl,

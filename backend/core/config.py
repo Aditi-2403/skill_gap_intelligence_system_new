@@ -1,7 +1,16 @@
-from functools import lru_cache
-from typing import List
 import os
+from functools import lru_cache
+from pathlib import Path
+from typing import List
 from urllib.parse import urlparse
+
+from dotenv import load_dotenv
+
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+PROJECT_DIR = BACKEND_DIR.parent
+load_dotenv(PROJECT_DIR / ".env")
+load_dotenv(BACKEND_DIR / ".env", override=True)
 
 
 def _normalize_database_url(raw_url: str) -> str:
@@ -41,6 +50,20 @@ class Settings:
     secret_key: str = os.getenv("SECRET_KEY", "change-me-in-production-use-a-long-random-string")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+    admin_email: str = os.getenv("ADMIN_EMAIL", "").lower().strip()
+    admin_password: str = os.getenv("ADMIN_PASSWORD", "")
+    frontend_base_url: str = os.getenv("FRONTEND_BASE_URL", "http://127.0.0.1:8000").strip().rstrip("/")
+    verification_code_expire_minutes: int = int(os.getenv("VERIFICATION_CODE_EXPIRE_MINUTES", "15"))
+    reset_code_expire_minutes: int = int(os.getenv("RESET_CODE_EXPIRE_MINUTES", "15"))
+
+    smtp_host: str = os.getenv("SMTP_HOST", "").strip()
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username: str = os.getenv("SMTP_USERNAME", "").strip()
+    smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+    smtp_from_email: str = os.getenv("SMTP_FROM_EMAIL", smtp_username).strip()
+    smtp_from_name: str = os.getenv("SMTP_FROM_NAME", "SkillSync").strip()
+    smtp_use_tls: bool = os.getenv("SMTP_USE_TLS", "true").lower().strip() in {"1", "true", "yes", "on"}
+    smtp_use_ssl: bool = os.getenv("SMTP_USE_SSL", "false").lower().strip() in {"1", "true", "yes", "on"}
 
     _database_url_env_value: str = os.getenv("DATABASE_URL", "")
     database_url, database_url_from_env = _resolve_database_url(_database_url_env_value)
