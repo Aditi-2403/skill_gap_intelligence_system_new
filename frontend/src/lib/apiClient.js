@@ -11,7 +11,15 @@ const inferLocalApiBaseUrl = () => {
 };
 
 const inferredBaseUrl = inferLocalApiBaseUrl();
-const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\\n/g, '').replace(/\/+$/, '');
+let configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\\n/g, '').replace(/\/+$/, '');
+
+if (typeof window !== 'undefined') {
+  const currentHost = window.location.hostname;
+  const isCurrentLocal = currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '0.0.0.0';
+  if (!isCurrentLocal && (configuredBaseUrl.includes('127.0.0.1') || configuredBaseUrl.includes('localhost'))) {
+    configuredBaseUrl = '';
+  }
+}
 
 const apiClient = axios.create({
   baseURL: configuredBaseUrl || inferredBaseUrl,
